@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.set_page_config(page_title="Csapatos Pingpong Kupa", layout="wide")
+st.set_page_config(page_title="Pingpong Verseny Dashboard", layout="wide")
 
-# --- 1. ADATOK INICIALIZÁLÁSA ---
+# --- 1. ADATOK ÉS LOGIKA ---
 if 'teams' not in st.session_state:
     st.session_state.teams = []
 if 'schedule_df' not in st.session_state:
@@ -12,95 +12,109 @@ if 'schedule_df' not in st.session_state:
 if 'tournament_started' not in st.session_state:
     st.session_state.tournament_started = False
 
-# --- 2. OPTIMALIZÁLT SORSOLÁS (Circle Method) ---
+def calculate_standings(df, teams):
+    """Kiszámolja a tabellát az asztalonkénti győzelmek alapján."""
+    # Kezdeti pontszámok (csak a valódi csapatoknak)
+    points = {t: 0 for t in teams if t != 'Pihenő'}
+    
+    for _, row in df.iterrows():
+        h_team = row["Hazai Csapat"]
+        v_team = row["Vendég Csapat"]
+        
+        # Csak akkor számolunk, ha nem pihenőnapos a meccs
+        if h_team in points and v_team in points:
+            # Piros asztal
+            if row["🔴 Piros H"] > row["🔴 Piros V"]: points[h_team] += 1
+            elif row["🔴 Piros V"] > row["🔴 Piros H"]: points[v_team] += 1
+            
+            # Szürke asztal
+            if row["⚪ Szürke H"] > row["⚪ Szürke V"]: points[h_team] += 1
+            elif row["⚪ Szürke V"] > row["⚪ Szürke H"]: points[v_team] += 1
+            
+            # Zöld asztal
+            if row["🟢 Zöld H"] > row["🟢 Zöld V"]: points[h_team] += 1
+            elif row["🟢 Zöld V"] > row["🟢 Zöld H"]: points[v_team] += 1
+            
+    # DataFrame-mé alakítjuk a pontokat
+    tabella = pd.DataFrame(list(points.items()), columns=['Csapat', 'Összes asztal-győzelem'])
+    return tabella.sort_values(by='Összes asztal-győzelem', ascending=False).reset_index(drop=True)
+
 def generate_optimized_schedule(teams_list):
     teams = teams_list.copy()
     if len(teams) % 2 != 0:
-        teams.append('Pihenő') # Ha páratlan, kell egy fantom csapat
+        teams.append('Pihenő')
     
     n = len(teams)
     schedule = []
-    
-    # Körforgó módszer generálása (alapból kerüli az egymás utáni meccseket)
     for round_idx in range(n - 1):
-        round_matches = []
         for i in range(n // 2):
-            t1 = teams[i]
-            t2 = teams[n - 1 - i]
+            t1, t2 = teams[i], teams[n - 1 - i]
             if t1 != 'Pihenő' and t2 != 'Pihenő':
-                round_matches.append((t1, t2))
-        
-        # Rotáció (az első fix marad, a többi forog)
+                schedule.append({
+                    "Hazai": t1, "Vendég": t2,
+                    "🔴 Piros H": 0, "🔴 Piros V": 0,
+                    "⚪ Szürke H": 0, "⚪ Szürke V": 0,
+                    "🟢 Zöld H": 0, "🟢 Zöld V": 0
+                })
         teams = [teams[0]] + [teams[-1]] + teams[1:-1]
-        
-        # Hogy egy körön belül is keverve legyenek az asztalhoz állások
-        random.shuffle(round_matches) 
-        
-        for m in round_matches:
-            schedule.append({
-                "Hazai Csapat": m[0],
-                "Vendég Csapat": m[1],
-                "🔴 Piros H": 0, "🔴 Piros V": 0,
-                "⚪ Szürke H": 0, "⚪ Szürke V": 0,
-                "🟢 Zöld H": 0, "🟢 Zöld V": 0,
-                "Befejezve": False
-            })
-            
-    return pd.DataFrame(schedule)
+    
+    df = pd.DataFrame(schedule)
+    df.columns = ["Hazai Csapat", "Vendég Csapat", "🔴 Piros H", "🔴 Piros V", "⚪ Szürke H", "⚪ Szürke V", "🟢 Zöld H", "🟢 Zöld V"]
+    return df
 
-# --- 3. FELÜLET: NEVEZÉS ---
-st.title("🏓 3-Asztalos Csapatverseny")
+# --- 2. FELÜLET ---
+
+st.title("🏓 3-Asztalos Csapatbajnokság")
 
 if not st.session_state.tournament_started:
-    st.header("1. Lépés: Csapatok megadása")
-    st.info("Add meg a 3 fős csapatok neveit. A sorsolás optimalizálva lesz az asztalokhoz és a pihenőidőkhöz.")
-    
+    # --- NEVEZÉSI RÉSZ ---
+    st.subheader("Csapatok nevezése")
     col1, col2 = st.columns([1, 2])
     with col1:
-        new_team = st.text_input("Csapat neve (pl. A csapat):", key="team_input")
+        new_team = st.text_input("Csapat neve:")
         if st.button("Hozzáadás"):
             if new_team and new_team not in st.session_state.teams:
                 st.session_state.teams.append(new_team)
                 st.rerun()
-                
     with col2:
-        st.write(f"**Regisztrált csapatok ({len(st.session_state.teams)}):**")
-        st.write(", ".join(st.session_state.teams))
-        
-    if len(st.session_state.teams) >= 2:
-        st.divider()
-        if st.button("🚀 Sorsolás és Verseny Indítása", type="primary"):
-            st.session_state.schedule_df = generate_optimized_schedule(st.session_state.teams)
-            st.session_state.tournament_started = True
-            st.rerun()
+        st.write(f"**Eddigi csapatok:** {', '.join(st.session_state.teams)}")
+        if len(st.session_state.teams) >= 2:
+            if st.button("Verseny Indítása 🚀", type="primary"):
+                st.session_state.schedule_df = generate_optimized_schedule(st.session_state.teams)
+                st.session_state.tournament_started = True
+                st.rerun()
 
-# --- 4. FELÜLET: ÉLŐ TÁBLÁZAT ---
 else:
-    st.header("2. Lépés: Eredmények folyamatos vezetése")
-    st.write("A táblázat celláira duplán kattintva tudod beírni a pontokat. Az asztalok (Piros, Szürke, Zöld) függetlenül, aszinkron módon szerkeszthetők.")
+    # --- ÉLŐ DASHBOARD RÉSZ ---
+    col_left, col_right = st.columns([3, 1]) # Bal oldalon a pontok, jobb oldalon a tabella
     
-    # Adatszerkesztő konfigurálása a színes asztalokhoz
-    edited_df = st.data_editor(
-        st.session_state.schedule_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Hazai Csapat": st.column_config.TextColumn(disabled=True),
-            "Vendég Csapat": st.column_config.TextColumn(disabled=True),
-            "🔴 Piros H": st.column_config.NumberColumn(min_value=0, step=1),
-            "🔴 Piros V": st.column_config.NumberColumn(min_value=0, step=1),
-            "⚪ Szürke H": st.column_config.NumberColumn(min_value=0, step=1),
-            "⚪ Szürke V": st.column_config.NumberColumn(min_value=0, step=1),
-            "🟢 Zöld H": st.column_config.NumberColumn(min_value=0, step=1),
-            "🟢 Zöld V": st.column_config.NumberColumn(min_value=0, step=1),
-            "Befejezve": st.column_config.CheckboxColumn("Befejezve ✅")
-        }
-    )
-    
-    # Változások mentése a memóriába
-    st.session_state.schedule_df = edited_df
+    with col_left:
+        st.subheader("📝 Meccsek és Pontok")
+        # Itt történik a varázslat: az edited_df-be kerül minden változtatás
+        edited_df = st.data_editor(
+            st.session_state.schedule_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Hazai Csapat": st.column_config.TextColumn(disabled=True),
+                "Vendég Csapat": st.column_config.TextColumn(disabled=True),
+            }
+        )
+        # Frissítjük a session state-et
+        st.session_state.schedule_df = edited_df
 
-    st.divider()
-    if st.button("Vissza a nevezéshez (Újraindítás)", type="secondary"):
-        st.session_state.clear()
-        st.rerun()
+    with col_right:
+        st.subheader("🏆 Tabella")
+        # Meghívjuk a számoló függvényt az aktuális adatokkal
+        tabella_df = calculate_standings(edited_df, st.session_state.teams)
+        
+        # Megjelenítjük a tabellát
+        st.dataframe(
+            tabella_df, 
+            hide_index=True, 
+            use_container_width=True
+        )
+        
+        if st.button("Új verseny (Reset)"):
+            st.session_state.clear()
+            st.rerun()
