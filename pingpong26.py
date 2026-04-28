@@ -115,7 +115,7 @@ else:
             st.session_state.schedule_df,
             use_container_width=True,
             hide_index=True,
-            key="eredmeny_editor"
+            key="eredmeny_editor",
             column_config={
                 "Hazai Csapat": st.column_config.TextColumn(disabled=True),
                 "Vendég Csapat": st.column_config.TextColumn(disabled=True),
