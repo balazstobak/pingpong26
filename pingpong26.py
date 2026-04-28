@@ -161,20 +161,38 @@ if not st.session_state.tournament_started:
     st.subheader("1. Csapatok nevezése")
     col1, col2 = st.columns([1, 2])
     
-    with col1:
-        # 1. Adjunk egy 'key' paramétert a text_input-hoz
-        new_team = st.text_input("Csapat neve:", placeholder="Pl. Rendek Bikái", key="new_team_input")
-        
-        if st.button("Hozzáadás"):
-            if new_team and new_team not in st.session_state.teams:
-                st.session_state.teams.append(new_team)
-                
-                # 2. Ürítsük ki a mezőt a session_state-en keresztül
-                st.session_state.new_team_input = "" 
-                
-                # 3. Frissítsük az oldalt
-                st.rerun()
+    # CALLBACK FÜGGVÉNY: Ez fut le, amikor megnyomják a "Hozzáadás" gombot
+    def add_team_callback():
+        new_team = st.session_state.new_team_input.strip()
+        if new_team and new_team not in st.session_state.teams:
+            st.session_state.teams.append(new_team)
+        # Itt ürítjük ki a mezőt szabályosan, a háttérben:
+        st.session_state.new_team_input = ""
     
+    with col1:
+        # A text_input csak megjelenik, és a key alapján összekötjük a memóriával
+        st.text_input("Csapat neve:", placeholder="Pl. Janiék", key="new_team_input")
+        
+        # A gomb megnyomásakor meghívja a fenti callback függvényt
+        st.button("Hozzáadás", on_click=add_team_callback)
+        
+        # --- BÓNUSZ: Csapatok betöltése fájlból ---
+        st.divider()
+        if st.button("📁 Betöltés CSV fájlból"):
+            try:
+                # Beolvassuk fejléc nélkül, hogy az első név ("Karmacs") se vesszen el
+                df_csv = pd.read_csv("pingpong25.xlsx - csapatok.csv", header=None)
+                names = df_csv[0].dropna().tolist()
+                
+                for name in names:
+                    name = str(name).strip()
+                    if name and name not in st.session_state.teams:
+                        st.session_state.teams.append(name)
+                st.success("Csapatok betöltve!")
+                st.rerun()
+            except Exception as e:
+                st.error("Nem sikerült a fájlt beolvasni. Ellenőrizd a fájlnevet a GitHubon!")
+                
     with col2:
         st.write(f"**Nevezett csapatok ({len(st.session_state.teams)}):**")
         st.write(", ".join(st.session_state.teams) if st.session_state.teams else "Még nincs nevező.")
@@ -182,7 +200,6 @@ if not st.session_state.tournament_started:
     if len(st.session_state.teams) >= 2:
         st.divider()
         st.subheader("2. Versenybeállítások")
-        
         scoring_choice = st.radio(
             "Válaszd ki a pontozási rendszert:",
             ["Asztali győzelem (1 pont a nyertesnek)", "Szett alapú (minden nyert szett 1 pont)"],
