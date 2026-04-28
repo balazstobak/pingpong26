@@ -102,11 +102,11 @@ def generate_optimized_schedule(teams_list):
     return pd.DataFrame(schedule)
 
 # <-- ÚJ: Sorok színezése funkció -->
-def highlight_finished_rows(row):
+#def highlight_finished_rows(row):
     # Ha a 'Befejezve' oszlop be van pipálva, az egész sor halványszürke lesz
-    if row['Befejezve']:
-        return ['background-color: rgba(128, 128, 128, 0.15); color: rgba(128, 128, 128, 0.6)'] * len(row)
-    return [''] * len(row)
+#    if row['Befejezve']:
+#        return ['background-color: rgba(128, 128, 128, 0.15); color: rgba(128, 128, 128, 0.6)'] * len(row)
+#    return [''] * len(row)
 
 # --- 3. FELÜLET ---
 st.title("🏓 3-Asztalos Csapatbajnokság")
@@ -150,9 +150,7 @@ else:
     with col_left:
         st.subheader("📝 Eredmények rögzítése")
         
-        # <-- ÚJ: Dinamikus maximum érték beállítása -->
-        # Ha a "Szett" szó benne van a választott típusban, max 2-t lehet beírni.
-        max_val = 2 if "Szett" in st.session_state.scoring_type else 30
+        max_val = 2 if "Szett" in st.session_state.scoring_type else 3
         
         # Oszlopok közös konfigurációja
         score_config = st.column_config.NumberColumn(min_value=0, max_value=max_val, step=1)
@@ -179,7 +177,7 @@ else:
             }
         )
         # Az editált adatokat visszamentjük az eredeti változóba
-        st.session_state.schedule_df = edited_df
+       # st.session_state.schedule_df = edited_df
 
     with col_right:
         st.subheader("🏆 Ranglista")
