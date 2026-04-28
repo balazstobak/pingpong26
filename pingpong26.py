@@ -161,37 +161,12 @@ if not st.session_state.tournament_started:
     st.subheader("1. Csapatok nevezése")
     col1, col2 = st.columns([1, 2])
     
-    # CALLBACK FÜGGVÉNY: Ez fut le, amikor megnyomják a "Hozzáadás" gombot
-    def add_team_callback():
-        new_team = st.session_state.new_team_input.strip()
-        if new_team and new_team not in st.session_state.teams:
-            st.session_state.teams.append(new_team)
-        # Itt ürítjük ki a mezőt szabályosan, a háttérben:
-        st.session_state.new_team_input = ""
-    
     with col1:
-        # A text_input csak megjelenik, és a key alapján összekötjük a memóriával
-        st.text_input("Csapat neve:", placeholder="Pl. Janiék", key="new_team_input")
-        
-        # A gomb megnyomásakor meghívja a fenti callback függvényt
-        st.button("Hozzáadás", on_click=add_team_callback)
-        
-        # --- BÓNUSZ: Csapatok betöltése fájlból ---
-        st.divider()
-        if st.button("📁 Betöltés CSV fájlból"):
-            try:
-                # Beolvassuk fejléc nélkül, hogy az első név ("Karmacs") se vesszen el
-                df_csv = pd.read_csv("pingpong25.xlsx - csapatok.csv", header=None)
-                names = df_csv[0].dropna().tolist()
-                
-                for name in names:
-                    name = str(name).strip()
-                    if name and name not in st.session_state.teams:
-                        st.session_state.teams.append(name)
-                st.success("Csapatok betöltve!")
+        new_team = st.text_input("Csapat neve:", placeholder="Pl. Janiék")
+        if st.button("Hozzáadás"):
+            if new_team and new_team not in st.session_state.teams:
+                st.session_state.teams.append(new_team)
                 st.rerun()
-            except Exception as e:
-                st.error("Nem sikerült a fájlt beolvasni. Ellenőrizd a fájlnevet a GitHubon!")
                 
     with col2:
         st.write(f"**Nevezett csapatok ({len(st.session_state.teams)}):**")
@@ -214,21 +189,22 @@ if not st.session_state.tournament_started:
             st.rerun()
 
 else:
-    # Ha a verseny már lezárult, nem engedjük szerkeszteni az eredményeket
     if st.session_state.tournament_ended:
         st.balloons()
         st.success("🎉 A verseny véget ért! Íme a hivatalos végeredmény:")
         
-        # Végső tabella kiszámolása (az elmentett adatokból) és megjelenítése nagyban
         final_tabella = calculate_standings(st.session_state.schedule_df, st.session_state.teams, st.session_state.scoring_type)
         st.dataframe(final_tabella, hide_index=True, use_container_width=True)
+        
+        st.subheader("📊 Minicsapatok részletes statisztikája")
+        subteam_stats_df = calculate_subteam_stats(st.session_state.schedule_df, st.session_state.teams)
+        st.dataframe(subteam_stats_df, hide_index=True, use_container_width=True)
         
         st.divider()
         if st.button("Új verseny indítása (Teljes Reset)"):
             st.session_state.clear()
             st.rerun()
             
-    # Ha még tart a verseny, mutatjuk a szerkesztőt
     else:
         st.info(f"Aktív pontozás: **{st.session_state.scoring_type}**")
         
@@ -236,7 +212,6 @@ else:
         
         with col_left:
             st.subheader("📝 Eredmények rögzítése")
-            
             max_val = 2 if "Szett" in st.session_state.scoring_type else 30
             score_config = st.column_config.NumberColumn(min_value=0, max_value=max_val, step=1)
             
@@ -258,10 +233,15 @@ else:
                 }
             )
 
+            # <-- ÚJ: Minicsapatok lenyitható panelja a szerkesztő alatt -->
+            with st.expander("📊 Minicsapatok statisztikái (Kattints a lenyitáshoz)"):
+                st.write("Ez a táblázat csak a **kipipált (Befejezve)** meccsek alapján számol!")
+                subteam_stats_df = calculate_subteam_stats(edited_df, st.session_state.teams)
+                st.dataframe(subteam_stats_df, hide_index=True, use_container_width=True)
+
         with col_right:
             st.subheader("🏆 Aktuális Ranglista")
             tabella_df = calculate_standings(edited_df, st.session_state.teams, st.session_state.scoring_type)
-            # A kis táblázatból eltüntetjük a Szett-differenciát, hogy jobban kiférjen (opcionális, de szebb így)
             st.dataframe(tabella_df[['Helyezés', 'Csapat', 'Pontszám']], hide_index=True, use_container_width=True)
             
             if st.button("Vissza a nevezéshez (Reset)"):
@@ -269,13 +249,10 @@ else:
                     st.session_state.clear()
                     st.rerun()
         
-        # --- ÚJ: Verseny lezárása logika ---
-        # Ha minden sor Befejezve oszlopa True (igaz), felajánljuk a lezárást
         if not edited_df.empty and edited_df['Befejezve'].all():
             st.divider()
             st.warning("Minden mérkőzés lezárult!")
             if st.button("🏁 Véget ért a verseny? (Eredményhirdetés mutatása)", type="primary"):
-                # Mielőtt lezárjuk, gyorsan elmentjük a legutolsó szerkesztett állapotot!
                 st.session_state.schedule_df = edited_df
                 st.session_state.tournament_ended = True
                 st.rerun()
