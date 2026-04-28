@@ -109,7 +109,7 @@ def generate_optimized_schedule(teams_list):
 #    return [''] * len(row)
 
 # --- 3. FELÜLET ---
-st.title("🏓 3-Asztalos Csapatbajnokság")
+st.title("🏓 Csapatbajnokság 🏓")
 
 if not st.session_state.tournament_started:
     st.subheader("1. Csapatok nevezése")
@@ -180,8 +180,8 @@ else:
        # st.session_state.schedule_df = edited_df
 
     with col_right:
-        st.subheader("🏆 Ranglista")
-        tabella_df = calculate_standings(st.session_state.schedule_df, st.session_state.teams, st.session_state.scoring_type)
+        st.subheader("🏆 Élő ranglista")
+        tabella_df = calculate_standings(edited_df, st.session_state.teams, st.session_state.scoring_type)
         st.dataframe(tabella_df, hide_index=True, use_container_width=True)
         
         if st.button("Vissza a nevezéshez (Reset)"):
