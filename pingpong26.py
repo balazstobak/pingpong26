@@ -158,10 +158,11 @@ else:
         score_config = st.column_config.NumberColumn(min_value=0, max_value=max_val, step=1)
         
         # A st.data_editor most már egy formázott (Styled) DataFrame-et kap
-        styled_df = st.session_state.schedule_df.style.apply(highlight_finished_rows, axis=1)
+        #styled_df = st.session_state.schedule_df.style.apply(highlight_finished_rows, axis=1)
         
         edited_df = st.data_editor(
-            styled_df,
+            #styled_df,
+            st.session_state.schedule_df,
             use_container_width=True,
             hide_index=True,
             key="eredmeny_editor",  # Fontos a villanás és adatvesztés elkerülésére!
