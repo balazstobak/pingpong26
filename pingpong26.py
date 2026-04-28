@@ -133,7 +133,8 @@ if not st.session_state.tournament_started:
         scoring_choice = st.radio(
             "Válaszd ki a pontozási rendszert:",
             ["Asztali győzelem (1 pont a nyertesnek)", "Szett alapú (minden nyert szett 1 pont)"],
-            help="Szett alapú módban maximum 2 pont (szett) írható be egy asztalhoz."
+            help="Példa: 2-0 \n - asztali győzelem: a győztes 1 pontot kap, a vesztes 0-t \n - szett alapú: a győztes 2 pontot kap, a vesztes 0-t \n
+            Példa: 2-1 \n -asztali győzelem: a győztes 1 pontot kap, a vesztes 0-t \n - szett alapú: a győztes 2 pontot kap, a vesztes 1-t"
         )
         
         if st.button("Verseny Indítása 🚀", type="primary"):
