@@ -162,10 +162,17 @@ if not st.session_state.tournament_started:
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        new_team = st.text_input("Csapat neve:", placeholder="Pl. Janiék")
+        # 1. Adjunk egy 'key' paramétert a text_input-hoz
+        new_team = st.text_input("Csapat neve:", placeholder="Pl. Rendek Bikái", key="new_team_input")
+        
         if st.button("Hozzáadás"):
             if new_team and new_team not in st.session_state.teams:
                 st.session_state.teams.append(new_team)
+                
+                # 2. Ürítsük ki a mezőt a session_state-en keresztül
+                st.session_state.new_team_input = "" 
+                
+                # 3. Frissítsük az oldalt
                 st.rerun()
     
     with col2:
