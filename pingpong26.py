@@ -13,12 +13,13 @@ if 'tournament_started' not in st.session_state:
     st.session_state.tournament_started = False
 if 'scoring_type' not in st.session_state:
     st.session_state.scoring_type = "Asztali győzelem"
+if 'tournament_ended' not in st.session_state:
+    st.session_state.tournament_ended = False
+
+# --- 2. LOGIKA ÉS FUNKCIÓK ---
 
 def generate_optimized_schedule(teams_list):
     teams = teams_list.copy()
-    
-    # 1. Alaposan megkeverjük a csapatokat rögtön az elején, hogy a sorsolás 
-    # tényleg véletlenszerű legyen, és ne a beírás sorrendjétől függjön!
     random.shuffle(teams)
     
     if len(teams) % 2 != 0:
@@ -40,20 +41,15 @@ def generate_optimized_schedule(teams_list):
                     "Befejezve": False
                 })
         
-        # 2. Megkeverjük a meccseket egy fordulón belül is
         random.shuffle(round_matches)
-        
-        # Hozzáadjuk a megkevert meccseket a fő listához
         schedule.extend(round_matches)
-        
-        # Csapatok forgatása a következő körhöz (Circle method)
         teams = [teams[0]] + [teams[-1]] + teams[1:-1]
         
     return pd.DataFrame(schedule)
 
-# --- 2. LOGIKA ÉS FUNKCIÓK ---
 def calculate_standings(df, teams, scoring_type):
-    points = {t: 0 for t in teams if t != 'Pihenő'}
+    """ÚJ: Kiszámolja a pontokat ÉS a szett-differenciát is!"""
+    stats = {t: {"Pontszám": 0, "Szerzett Szett": 0, "Kapott Szett": 0} for t in teams if t != 'Pihenő'}
     
     tables = [
         ("🔴 Piros H", "🔴 Piros V"),
@@ -65,51 +61,50 @@ def calculate_standings(df, teams, scoring_type):
         h_team = row["Hazai Csapat"]
         v_team = row["Vendég Csapat"]
         
-        if h_team in points and v_team in points:
+        if h_team in stats and v_team in stats:
             for h_col, v_col in tables:
                 h_score = row[h_col] if pd.notna(row[h_col]) else 0
                 v_score = row[v_col] if pd.notna(row[v_col]) else 0
                 
-                if scoring_type == "Asztali győzelem (1 pont a nyertesnek)":
-                    if h_score > v_score: points[h_team] += 1
-                    elif v_score > h_score: points[v_team] += 1
-                else:
-                    points[h_team] += h_score
-                    points[v_team] += v_score
+                # Szettek gyűjtése a differenciához
+                stats[h_team]["Szerzett Szett"] += h_score
+                stats[h_team]["Kapott Szett"] += v_score
+                stats[v_team]["Szerzett Szett"] += v_score
+                stats[v_team]["Kapott Szett"] += h_score
                 
-    tabella = pd.DataFrame(list(points.items()), columns=['Csapat', 'Összpontszám'])
-    return tabella.sort_values(by='Összpontszám', ascending=False).reset_index(drop=True)
-
-def generate_optimized_schedule(teams_list):
-    teams = teams_list.copy()
-    if len(teams) % 2 != 0:
-        teams.append('Pihenő')
+                # Pontok számolása a szabály alapján
+                if scoring_type == "Asztali győzelem (1 pont a nyertesnek)":
+                    if h_score > v_score: stats[h_team]["Pontszám"] += 1
+                    elif v_score > h_score: stats[v_team]["Pontszám"] += 1
+                else:
+                    stats[h_team]["Pontszám"] += h_score
+                    stats[v_team]["Pontszám"] += v_score
+                
+    # Táblázat összeállítása
+    tabella_data = []
+    for team, data in stats.items():
+        szett_diff = data["Szerzett Szett"] - data["Kapott Szett"]
+        tabella_data.append({
+            "Csapat": team,
+            "Pontszám": data["Pontszám"],
+            "Szett-differencia": szett_diff
+        })
+        
+    tabella = pd.DataFrame(tabella_data)
     
-    n = len(teams)
-    schedule = []
-    for round_idx in range(n - 1):
-        for i in range(n // 2):
-            t1, t2 = teams[i], teams[n - 1 - i]
-            if t1 != 'Pihenő' and t2 != 'Pihenő':
-                schedule.append({
-                    "Hazai Csapat": t1, "Vendég Csapat": t2,
-                    "🔴 Piros H": 0, "🔴 Piros V": 0,
-                    "⚪ Szürke H": 0, "⚪ Szürke V": 0,
-                    "🟢 Zöld H": 0, "🟢 Zöld V": 0,
-                    "Befejezve": False # <-- ÚJ: pipa oszlop hozzáadása
-                })
-        teams = [teams[0]] + [teams[-1]] + teams[1:-1]
-    return pd.DataFrame(schedule)
+    # Sorrend felállítása: 1. Pontszám, 2. Szett-differencia alapján
+    tabella = tabella.sort_values(by=['Pontszám', 'Szett-differencia'], ascending=[False, False]).reset_index(drop=True)
+    
+    # Helyezés (sorszám) oszlop hozzáadása
+    tabella.index = tabella.index + 1
+    tabella.reset_index(inplace=True)
+    tabella.rename(columns={'index': 'Helyezés'}, inplace=True)
+    
+    return tabella
 
-# <-- ÚJ: Sorok színezése funkció -->
-#def highlight_finished_rows(row):
-    # Ha a 'Befejezve' oszlop be van pipálva, az egész sor halványszürke lesz
-#    if row['Befejezve']:
-#        return ['background-color: rgba(128, 128, 128, 0.15); color: rgba(128, 128, 128, 0.6)'] * len(row)
-#    return [''] * len(row)
 
-# --- 3. FELÜLET ---
-st.title("🏓 Csapatbajnokság 🏓")
+# --- 3. FELÜLET (UI) ---
+st.title("🏓 3-Asztalos Csapatbajnokság")
 
 if not st.session_state.tournament_started:
     st.subheader("1. Csapatok nevezése")
@@ -133,59 +128,79 @@ if not st.session_state.tournament_started:
         scoring_choice = st.radio(
             "Válaszd ki a pontozási rendszert:",
             ["Asztali győzelem (1 pont a nyertesnek)", "Szett alapú (minden nyert szett 1 pont)"],
-            help="Példa: 2-0 \n - asztali győzelem: a győztes 1 pontot kap, a vesztes 0-t \n - szett alapú: a győztes 2 pontot kap, a vesztes 0-t \n
-            Példa: 2-1 \n -asztali győzelem: a győztes 1 pontot kap, a vesztes 0-t \n - szett alapú: a győztes 2 pontot kap, a vesztes 1-t"
+            help="Szett alapú módban maximum 2 pont (szett) írható be egy asztalhoz."
         )
         
         if st.button("Verseny Indítása 🚀", type="primary"):
             st.session_state.scoring_type = scoring_choice
             st.session_state.schedule_df = generate_optimized_schedule(st.session_state.teams)
             st.session_state.tournament_started = True
+            st.session_state.tournament_ended = False
             st.rerun()
 
 else:
-    st.info(f"Aktív pontozás: **{st.session_state.scoring_type}**")
-    
-    col_left, col_right = st.columns([3, 1.2])
-    
-    with col_left:
-        st.subheader("📝 Eredmények rögzítése")
+    # Ha a verseny már lezárult, nem engedjük szerkeszteni az eredményeket
+    if st.session_state.tournament_ended:
+        st.balloons()
+        st.success("🎉 A verseny véget ért! Íme a hivatalos végeredmény:")
         
-        max_val = 2 if "Szett" in st.session_state.scoring_type else 3
+        # Végső tabella kiszámolása (az elmentett adatokból) és megjelenítése nagyban
+        final_tabella = calculate_standings(st.session_state.schedule_df, st.session_state.teams, st.session_state.scoring_type)
+        st.dataframe(final_tabella, hide_index=True, use_container_width=True)
         
-        # Oszlopok közös konfigurációja
-        score_config = st.column_config.NumberColumn(min_value=0, max_value=max_val, step=1)
+        st.divider()
+        if st.button("Új verseny indítása (Teljes Reset)"):
+            st.session_state.clear()
+            st.rerun()
+            
+    # Ha még tart a verseny, mutatjuk a szerkesztőt
+    else:
+        st.info(f"Aktív pontozás: **{st.session_state.scoring_type}**")
         
-        # A st.data_editor most már egy formázott (Styled) DataFrame-et kap
-        #styled_df = st.session_state.schedule_df.style.apply(highlight_finished_rows, axis=1)
+        col_left, col_right = st.columns([3, 1.2])
         
-        edited_df = st.data_editor(
-            #styled_df,
-            st.session_state.schedule_df,
-            use_container_width=True,
-            hide_index=True,
-            key="eredmeny_editor",  # Fontos a villanás és adatvesztés elkerülésére!
-            column_config={
-                "Hazai Csapat": st.column_config.TextColumn(disabled=True),
-                "Vendég Csapat": st.column_config.TextColumn(disabled=True),
-                "🔴 Piros H": score_config,
-                "🔴 Piros V": score_config,
-                "⚪ Szürke H": score_config,
-                "⚪ Szürke V": score_config,
-                "🟢 Zöld H": score_config,
-                "🟢 Zöld V": score_config,
-                "Befejezve": st.column_config.CheckboxColumn("Befejezve ✅", default=False)
-            }
-        )
-        # Az editált adatokat visszamentjük az eredeti változóba
-       # st.session_state.schedule_df = edited_df
+        with col_left:
+            st.subheader("📝 Eredmények rögzítése")
+            
+            max_val = 2 if "Szett" in st.session_state.scoring_type else 30
+            score_config = st.column_config.NumberColumn(min_value=0, max_value=max_val, step=1)
+            
+            edited_df = st.data_editor(
+                st.session_state.schedule_df,
+                use_container_width=True,
+                hide_index=True,
+                key="eredmeny_editor",
+                column_config={
+                    "Hazai Csapat": st.column_config.TextColumn(disabled=True),
+                    "Vendég Csapat": st.column_config.TextColumn(disabled=True),
+                    "🔴 Piros H": score_config,
+                    "🔴 Piros V": score_config,
+                    "⚪ Szürke H": score_config,
+                    "⚪ Szürke V": score_config,
+                    "🟢 Zöld H": score_config,
+                    "🟢 Zöld V": score_config,
+                    "Befejezve": st.column_config.CheckboxColumn("Befejezve ✅", default=False)
+                }
+            )
 
-    with col_right:
-        st.subheader("🏆 Élő ranglista")
-        tabella_df = calculate_standings(edited_df, st.session_state.teams, st.session_state.scoring_type)
-        st.dataframe(tabella_df, hide_index=True, use_container_width=True)
+        with col_right:
+            st.subheader("🏆 Aktuális Ranglista")
+            tabella_df = calculate_standings(edited_df, st.session_state.teams, st.session_state.scoring_type)
+            # A kis táblázatból eltüntetjük a Szett-differenciát, hogy jobban kiférjen (opcionális, de szebb így)
+            st.dataframe(tabella_df[['Helyezés', 'Csapat', 'Pontszám']], hide_index=True, use_container_width=True)
+            
+            if st.button("Vissza a nevezéshez (Reset)"):
+                if st.checkbox("Biztosan törlöd az aktuális versenyt?"):
+                    st.session_state.clear()
+                    st.rerun()
         
-        if st.button("Vissza a nevezéshez (Reset)"):
-            if st.checkbox("Biztosan törlöd az aktuális versenyt?"):
-                st.session_state.clear()
+        # --- ÚJ: Verseny lezárása logika ---
+        # Ha minden sor Befejezve oszlopa True (igaz), felajánljuk a lezárást
+        if not edited_df.empty and edited_df['Befejezve'].all():
+            st.divider()
+            st.warning("Minden mérkőzés lezárult!")
+            if st.button("🏁 Véget ért a verseny? (Eredményhirdetés mutatása)", type="primary"):
+                # Mielőtt lezárjuk, gyorsan elmentjük a legutolsó szerkesztett állapotot!
+                st.session_state.schedule_df = edited_df
+                st.session_state.tournament_ended = True
                 st.rerun()
