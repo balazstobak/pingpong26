@@ -102,6 +102,57 @@ def calculate_standings(df, teams, scoring_type):
     
     return tabella
 
+def calculate_subteam_stats(df, teams):
+    tables = [
+        ("🔴 Piros", "🔴 Piros H", "🔴 Piros V"),
+        ("⚪ Szürke", "⚪ Szürke H", "⚪ Szürke V"),
+        ("🟢 Zöld", "🟢 Zöld H", "🟢 Zöld V")
+    ]
+    
+    # Adatszerkezet inicializálása
+    team_stats = {t: {asztal: {"GY": 0, "V": 0, "Szerzett": 0, "Kapott": 0} for asztal, _, _ in tables} for t in teams if t != 'Pihenő'}
+    
+    for _, row in df.iterrows():
+        h_team, v_team = row["Hazai Csapat"], row["Vendég Csapat"]
+        
+        # Csak a befejezett (kipipált) meccseket számoljuk!
+        if (h_team in team_stats and v_team in team_stats) and row.get("Befejezve", False):
+            for asztal_nev, h_col, v_col in tables:
+                h_score = row[h_col] if pd.notna(row[h_col]) else 0
+                v_score = row[v_col] if pd.notna(row[v_col]) else 0
+                
+                # Hazai csapat statjai
+                team_stats[h_team][asztal_nev]["Szerzett"] += h_score
+                team_stats[h_team][asztal_nev]["Kapott"] += v_score
+                
+                # Vendég csapat statjai
+                team_stats[v_team][asztal_nev]["Szerzett"] += v_score
+                team_stats[v_team][asztal_nev]["Kapott"] += h_score
+                
+                # Győzelem / Vereség eldöntése
+                if h_score > v_score:
+                    team_stats[h_team][asztal_nev]["GY"] += 1
+                    team_stats[v_team][asztal_nev]["V"] += 1
+                elif v_score > h_score:
+                    team_stats[v_team][asztal_nev]["GY"] += 1
+                    team_stats[h_team][asztal_nev]["V"] += 1
+
+    # Formázás DataFrame-be (a kép alapján)
+    flattened_data = []
+    for t in sorted(teams):
+        if t == 'Pihenő': continue
+        for asztal_nev, _, _ in tables:
+            s = team_stats[t][asztal_nev]
+            flattened_data.append({
+                "Csapatok": t,
+                "Asztal": asztal_nev,
+                "GY": s["GY"],
+                "V": s["V"],
+                "Szerzett Sz.": s["Szerzett"],
+                "Kapott Sz.": s["Kapott"]
+            })
+            
+    return pd.DataFrame(flattened_data)
 
 # --- 3. FELÜLET (UI) ---
 st.title("🏓 3-Asztalos Csapatbajnokság")
