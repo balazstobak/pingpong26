@@ -206,4 +206,4 @@ elif st.session_state.phase == "KNOCKOUT":
         st.session_state.clear()
         st.rerun()
 
-A fenti prezentáció és kód minden igényedet lefedi! Sok sikert a versenyhez!
+
