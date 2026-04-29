@@ -193,6 +193,11 @@ else:
         st.balloons()
         st.success("🎉 A verseny véget ért! Íme a hivatalos végeredmény:")
         
+        # Lejátszott meccsek táblázatának megjelenítése ---
+        st.subheader("📅 Lejátszott mérkőzések (Végeredmény)")
+        st.dataframe(st.session_state.schedule_df, hide_index=True, use_container_width=True)
+        
+        st.subheader("🏆 Végső Ranglista")
         final_tabella = calculate_standings(st.session_state.schedule_df, st.session_state.teams, st.session_state.scoring_type)
         st.dataframe(final_tabella, hide_index=True, use_container_width=True)
         
@@ -233,7 +238,6 @@ else:
                 }
             )
 
-            # <-- ÚJ: Minicsapatok lenyitható panelja a szerkesztő alatt -->
             with st.expander("📊 Minicsapatok statisztikái (Kattints a lenyitáshoz)"):
                 st.write("Ez a táblázat csak a **kipipált (Befejezve)** meccsek alapján számol!")
                 subteam_stats_df = calculate_subteam_stats(edited_df, st.session_state.teams)
