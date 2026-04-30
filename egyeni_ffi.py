@@ -1,290 +1,180 @@
 import streamlit as st
-import random
-import itertools
 import pandas as pd
+import random
+from itertools import combinations
 
-st.set_page_config(page_title="Pingpong verseny", layout="wide")
+# Oldal beállításai
+st.set_page_config(page_title="🏓 Pingpong Bajnokság", layout="wide")
 
-st.title("🏓 Pingpong verseny lebonyolító app")
+# Állapotváltozók (Session State) inicializálása
+if 'phase' not in st.session_state:
+    st.session_state.phase = 'registration'
+if 'players' not in st.session_state:
+    st.session_state.players = []
+if 'groups' not in st.session_state:
+    st.session_state.groups = []
+if 'matches' not in st.session_state:
+    st.session_state.matches = {}
 
+# Csoportméretek kiszámolása a szabályok alapján
+def calculate_group_sizes(n):
+    if n < 3: return []
+    if n == 3: return [3]
+    if n == 5: return [5]
+    if n == 6: return [3, 3]
+    
+    q, r = divmod(n, 4)
+    if r == 0: 
+        return [4] * q
+    if r == 1: 
+        return [4] * (q - 1) + [5]
+    if r == 2: 
+        return [4] * (q - 2) + [5, 5] if q >= 2 else [3, 3]
+    if r == 3: 
+        return [4] * q + [3]
+    return []
 
-# -----------------------------
-# Segédfüggvények
-# -----------------------------
-
-def create_groups(players):
-    """
-    A játékosokat lehetőleg 4 fős csoportokba osztja.
-    Ha nem osztható pontosan 4-gyel, akkor 3 vagy 5 fős csoportokat is használ.
-    """
-
-    n = len(players)
-
-    if n < 3:
-        return None
-
-    group_sizes = None
-
-    # Először próbáljuk csak 4-es csoportokkal
-    if n % 4 == 0:
-        group_sizes = [4] * (n // 4)
-
-    else:
-        # Megengedett csoportméretek: 3, 4, 5
-        # Olyan beosztást keresünk, ahol a legtöbb csoport 4 fős
-        best = None
-
-        for num_groups in range(1, n + 1):
-            for sizes in itertools.product([3, 4, 5], repeat=num_groups):
-                if sum(sizes) == n:
-                    score = sizes.count(4)
-                    if best is None or score > best[0]:
-                        best = (score, list(sizes))
-
-        if best:
-            group_sizes = best[1]
-
-    if group_sizes is None:
-        return None
-
-    random.shuffle(players)
-
-    groups = {}
-    index = 0
-
-    for i, size in enumerate(group_sizes, start=1):
-        group_name = f"Csoport {i}"
-        groups[group_name] = players[index:index + size]
-        index += size
-
+# Játékosok beosztása a kiszámolt méretek alapján
+def generate_groups(player_list):
+    random.shuffle(player_list) # Játékosok összekeverése a véletlenszerű sorsoláshoz
+    sizes = calculate_group_sizes(len(player_list))
+    groups = []
+    idx = 0
+    for size in sizes:
+        groups.append(player_list[idx:idx+size])
+        idx += size
     return groups
 
+# --- 1. FÁZIS: JELENTKEZÉS ÉS SORSOLÁS ---
+if st.session_state.phase == 'registration':
+    st.title("🏓 Pingpong Bajnokság Szervező")
+    st.markdown("### 1. Lépés: Jelentkezők megadása")
+    st.write("Írd be a jelentkezők neveit, minden sort egy új névnek fenntartva!")
+    
+    players_input = st.text_area("Jelentkezők listája:", height=300, placeholder="Kovács János\nNagy Péter\nSzabó Anna...")
 
-def create_matches(players):
-    """Körmérkőzések létrehozása egy csoporton belül."""
-    return list(itertools.combinations(players, 2))
-
-
-def calculate_table(players, results):
-    table = {
-        player: {
-            "Játékos": player,
-            "Meccs": 0,
-            "Győzelem": 0,
-            "Vereség": 0,
-            "Pont": 0,
-            "Nyert szett": 0,
-            "Vesztett szett": 0,
-            "Szettkülönbség": 0,
-        }
-        for player in players
-    }
-
-    for result in results:
-        p1 = result["p1"]
-        p2 = result["p2"]
-        s1 = result["s1"]
-        s2 = result["s2"]
-
-        if s1 is None or s2 is None:
-            continue
-
-        # Csak érvényes pingpong eredmény: 2-0, 2-1, 1-2, 0-2
-        valid_scores = [(2, 0), (2, 1), (1, 2), (0, 2)]
-
-        if (s1, s2) not in valid_scores:
-            continue
-
-        table[p1]["Meccs"] += 1
-        table[p2]["Meccs"] += 1
-
-        table[p1]["Nyert szett"] += s1
-        table[p1]["Vesztett szett"] += s2
-
-        table[p2]["Nyert szett"] += s2
-        table[p2]["Vesztett szett"] += s1
-
-        if s1 > s2:
-            winner = p1
-            loser = p2
+    if st.button("Csoportok sorsolása", type="primary"):
+        players = [p.strip() for p in players_input.split('\n') if p.strip()]
+        if len(players) < 3:
+            st.error("A verseny indításához legalább 3 jelentkezőre van szükség!")
         else:
-            winner = p2
-            loser = p1
-
-        table[winner]["Győzelem"] += 1
-        table[winner]["Pont"] += 1
-        table[loser]["Vereség"] += 1
-
-    for player in players:
-        table[player]["Szettkülönbség"] = (
-            table[player]["Nyert szett"] - table[player]["Vesztett szett"]
-        )
-
-    df = pd.DataFrame(table.values())
-
-    df = df.sort_values(
-        by=["Pont", "Szettkülönbség", "Nyert szett"],
-        ascending=False
-    ).reset_index(drop=True)
-
-    df.index = df.index + 1
-
-    return df
-
-
-# -----------------------------
-# Session state inicializálás
-# -----------------------------
-
-if "groups" not in st.session_state:
-    st.session_state.groups = None
-
-if "results" not in st.session_state:
-    st.session_state.results = {}
-
-
-# -----------------------------
-# Játékosok bevitele
-# -----------------------------
-
-st.header("1. Jelentkezők megadása")
-
-names_text = st.text_area(
-    "Írd be a játékosok neveit, soronként egyet:",
-    height=250,
-    placeholder="Példa:\nAnna\nBéla\nCsaba\nDóra"
-)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    shuffle_players = st.checkbox("Játékosok véletlenszerű keverése", value=True)
-
-with col2:
-    create_button = st.button("Csoportok létrehozása")
-
-
-if create_button:
-    players = [
-        name.strip()
-        for name in names_text.split("\n")
-        if name.strip()
-    ]
-
-    players = list(dict.fromkeys(players))
-
-    if len(players) < 3:
-        st.error("Legalább 3 játékos szükséges.")
-    else:
-        if shuffle_players:
-            random.shuffle(players)
-
-        groups = create_groups(players)
-
-        if groups is None:
-            st.error("Nem sikerült megfelelő csoportbeosztást készíteni.")
-        else:
+            st.session_state.players = players
+            groups = generate_groups(players)
             st.session_state.groups = groups
-            st.session_state.results = {}
+            
+            # Körmérkőzések legenerálása minden csoporthoz
+            matches = {}
+            match_id = 0
+            for g_id, group in enumerate(groups):
+                for p1, p2 in combinations(group, 2):
+                    matches[match_id] = {
+                        'group_id': g_id,
+                        'p1': p1,
+                        'p2': p2,
+                        'result': 'Nem játszott'
+                    }
+                    match_id += 1
+            st.session_state.matches = matches
+            st.session_state.phase = 'groups'
+            st.rerun()
 
-            for group_name, group_players in groups.items():
-                st.session_state.results[group_name] = []
-
-                for p1, p2 in create_matches(group_players):
-                    st.session_state.results[group_name].append({
-                        "p1": p1,
-                        "p2": p2,
-                        "s1": None,
-                        "s2": None,
-                    })
-
-            st.success("Csoportok sikeresen létrehozva!")
-
-
-# -----------------------------
-# Csoportok és eredmények
-# -----------------------------
-
-if st.session_state.groups:
-
-    st.header("2. Csoportok és eredmények")
-
-    for group_name, players in st.session_state.groups.items():
-
-        st.subheader(group_name)
-
-        st.write("**Játékosok:** " + ", ".join(players))
-
-        left, right = st.columns([1.2, 1])
-
-        with left:
-            st.markdown("### Mérkőzések")
-
-            for i, match in enumerate(st.session_state.results[group_name]):
-
-                p1 = match["p1"]
-                p2 = match["p2"]
-
-                col_a, col_b, col_c, col_d = st.columns([2, 1, 1, 2])
-
-                with col_a:
-                    st.write(p1)
-
-                with col_b:
-                    s1 = st.selectbox(
-                        "Szett",
-                        options=[None, 0, 1, 2],
-                        key=f"{group_name}_{i}_s1",
-                        label_visibility="collapsed"
-                    )
-
-                with col_c:
-                    s2 = st.selectbox(
-                        "Szett",
-                        options=[None, 0, 1, 2],
-                        key=f"{group_name}_{i}_s2",
-                        label_visibility="collapsed"
-                    )
-
-                with col_d:
-                    st.write(p2)
-
-                st.session_state.results[group_name][i]["s1"] = s1
-                st.session_state.results[group_name][i]["s2"] = s2
-
-                if s1 is not None and s2 is not None:
-                    if (s1, s2) not in [(2, 0), (2, 1), (1, 2), (0, 2)]:
-                        st.warning(
-                            f"Érvénytelen eredmény: {p1} {s1}-{s2} {p2}. "
-                            "Csak 2-0, 2-1, 1-2 vagy 0-2 lehet."
-                        )
-
-        with right:
-            st.markdown("### Élő tabella")
-
-            table = calculate_table(
-                players,
-                st.session_state.results[group_name]
-            )
-
-            st.dataframe(table, use_container_width=True)
-
-        st.divider()
-
-
-# -----------------------------
-# Újrakezdés
-# -----------------------------
-
-st.header("3. Verseny kezelése")
-
-if st.button("Verseny törlése / újrakezdés"):
-    st.session_state.groups = None
-    st.session_state.results = {}
-    st.rerun()
-
-    if st.button("Vissza a regisztrációhoz (Törlés)"):
-        st.session_state.clear()
+# --- 2. FÁZIS: MÉRKŐZÉSEK ÉS ÉLŐ TABELLA ---
+elif st.session_state.phase == 'groups':
+    st.title("🏓 Csoportmérkőzések és Élő Tabella")
+    
+    if st.button("⬅️ Új verseny indítása (Vissza a regisztrációhoz)"):
+        st.session_state.phase = 'registration'
         st.rerun()
+
+    st.markdown("---")
+
+    # Csoportok iterálása és megjelenítése
+    for g_id, group in enumerate(st.session_state.groups):
+        st.markdown(f"## {g_id + 1}. Csoport ({len(group)} fős)")
+        
+        # Két oszlop létrehozása: bal oldalon a meccsek, jobb oldalon a tabella
+        col1, col2 = st.columns([1, 1.2], gap="large")
+        
+        # Csak az aktuális csoport meccseinek kiválogatása
+        group_matches = {k: v for k, v in st.session_state.matches.items() if v['group_id'] == g_id}
+        
+        with col1:
+            st.markdown("#### 📝 Eredmények rögzítése")
+            for m_id, m_data in group_matches.items():
+                options = ["Nem játszott", "2 - 0", "2 - 1", "1 - 2", "0 - 2"]
+                current_val = m_data['result']
+                idx = options.index(current_val)
+                
+                # Legördülő menü a pontos szetteredmény kiválasztásához
+                new_val = st.selectbox(
+                    f"{m_data['p1']} vs {m_data['p2']}", 
+                    options, 
+                    index=idx, 
+                    key=f"match_{m_id}"
+                )
+                
+                # Ha változik az eredmény, frissítjük az állapotot és újratöltjük az oldalt a tabellához
+                if new_val != current_val:
+                    st.session_state.matches[m_id]['result'] = new_val
+                    st.rerun()
+        
+        with col2:
+            st.markdown("#### 📊 Élő Tabella")
+            
+            # Tabella statisztikák inicializálása a csoport tagjainak
+            stats = {p: {'Név': p, 'Mérkőzés': 0, 'Pont': 0, 'Győzelem': 0, 'Vereség': 0, 'Szett +': 0, 'Szett -': 0} for p in group}
+            
+            # Eredmények feldolgozása a tabellához
+            for m_id, m_data in group_matches.items():
+                res = m_data['result']
+                p1, p2 = m_data['p1'], m_data['p2']
+                
+                if res != "Nem játszott":
+                    stats[p1]['Mérkőzés'] += 1
+                    stats[p2]['Mérkőzés'] += 1
+                    
+                    if res == "2 - 0":
+                        stats[p1]['Győzelem'] += 1
+                        stats[p1]['Pont'] += 1
+                        stats[p2]['Vereség'] += 1
+                        stats[p1]['Szett +'] += 2
+                        stats[p2]['Szett -'] += 2
+                    elif res == "2 - 1":
+                        stats[p1]['Győzelem'] += 1
+                        stats[p1]['Pont'] += 1
+                        stats[p2]['Vereség'] += 1
+                        stats[p1]['Szett +'] += 2
+                        stats[p1]['Szett -'] += 1
+                        stats[p2]['Szett +'] += 1
+                        stats[p2]['Szett -'] += 2
+                    elif res == "1 - 2":
+                        stats[p2]['Győzelem'] += 1
+                        stats[p2]['Pont'] += 1
+                        stats[p1]['Vereség'] += 1
+                        stats[p2]['Szett +'] += 2
+                        stats[p2]['Szett -'] += 1
+                        stats[p1]['Szett +'] += 1
+                        stats[p1]['Szett -'] += 2
+                    elif res == "0 - 2":
+                        stats[p2]['Győzelem'] += 1
+                        stats[p2]['Pont'] += 1
+                        stats[p1]['Vereség'] += 1
+                        stats[p2]['Szett +'] += 2
+                        stats[p1]['Szett -'] += 2
+
+            # Pandas DataFrame generálása a rendezéshez
+            df = pd.DataFrame(list(stats.values()))
+            df['Szett Arány'] = df['Szett +'] - df['Szett -']
+            
+            # Rendezés: 1. Pontszám, 2. Szett arány, 3. Győzelmek száma
+            df = df.sort_values(by=['Pont', 'Szett Arány', 'Győzelem'], ascending=[False, False, False]).reset_index(drop=True)
+            df.index += 1 # Hogy 1-től kezdődjön a sorszámozás
+            
+            st.dataframe(
+                df[['Név', 'Mérkőzés', 'Pont', 'Szett +', 'Szett -', 'Szett Arány']], 
+                use_container_width=True
+            )
+        
+        st.divider()
 
 
