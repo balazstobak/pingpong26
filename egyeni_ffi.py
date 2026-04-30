@@ -4,7 +4,7 @@ import random
 from itertools import combinations
 
 # Oldal beállításai
-st.set_page_config(page_title="🏓 Pingpong Bajnokság", layout="wide")
+st.set_page_config(page_title="🏓 Egyéni férfi bajnokság", layout="wide")
 
 # Állapotváltozók (Session State) inicializálása
 if 'phase' not in st.session_state:
@@ -94,7 +94,7 @@ def update_knockout_tree():
 
 # --- 1. FÁZIS: JELENTKEZÉS ---
 if st.session_state.phase == 'registration':
-    st.title("🏓 Pingpong Bajnokság Szervező")
+    st.title("🏓 Egynéni férfi bajnokság")
     st.markdown("### 1. Lépés: Jelentkezők megadása")
     players_input = st.text_area("Jelentkezők listája (minden név új sorban):", height=200)
 
